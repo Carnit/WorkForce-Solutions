@@ -1,0 +1,482 @@
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { authAPI, profileAPI, opportunitiesAPI, networkAPI } from '../services/api';
+import * as types from '../types';
+
+// Mock fetch globally
+global.fetch = vi.fn();
+
+describe('API Service - Auth', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('should signup a new user successfully', async () => {
+    const mockResponse: types.AuthResponse = {
+      access_token: 'test-token-123',
+      token_type: 'bearer'
+    };
+
+    (global.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockResponse
+    });
+
+    const userData: types.UserCreate = {
+      email: 'test@example.com',
+      username: 'testuser',
+      password: 'password123',
+      full_name: 'Test User'
+    };
+
+    const result = await authAPI.signup(userData);
+
+    expect(result).toEqual(mockResponse);
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/auth/signup'),
+      expect.objectContaining({
+        method: 'POST'
+      })
+    );
+  });
+
+  it('should login successfully', async () => {
+    const mockResponse: types.AuthResponse = {
+      access_token: 'test-token-456',
+      token_type: 'bearer'
+    };
+
+    (global.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockResponse
+    });
+
+    const loginData: types.UserLogin = {
+      email: 'test@example.com',
+      password: 'password123'
+    };
+
+    const result = await authAPI.login(loginData);
+
+    expect(result).toEqual(mockResponse);
+  });
+
+  it('should handle signup error', async () => {
+    const mockError = { detail: 'Email already exists' };
+
+    (global.fetch as any).mockResolvedValueOnce({
+      ok: false,
+      json: async () => mockError
+    });
+
+    const userData: types.UserCreate = {
+      email: 'existing@example.com',
+      username: 'testuser',
+      password: 'password123',
+      full_name: 'Test User'
+    };
+
+    await expect(authAPI.signup(userData)).rejects.toThrow('Email already exists');
+  });
+});
+
+describe('API Service - Profile', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem('token', 'test-token-123');
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('should fetch current user profile', async () => {
+    const mockUser: types.User = {
+      id: 1,
+      email: 'test@example.com',
+      username: 'testuser',
+      full_name: 'Test User',
+      bio: 'I am a test user',
+      skills: null,
+      interests: null,
+      profile_image: null,
+      mode: 'builder',
+      created_at: '2024-01-01T00:00:00Z'
+    };
+
+    (global.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockUser
+    });
+
+    const result = await profileAPI.getMe();
+
+    expect(result).toEqual(mockUser);
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/profile/me'),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          'Authorization': 'Bearer test-token-123'
+        })
+      })
+    );
+  });
+
+  it('should update user profile', async () => {
+    const mockUpdatedUser: types.User = {
+      id: 1,
+      email: 'test@example.com',
+      username: 'testuser',
+      full_name: 'Test User',
+      bio: 'Updated bio',
+      skills: '["javascript", "react"]',
+      interests: '["web", "ai"]',
+      profile_image: 'https://example.com/image.png',
+      mode: 'builder',
+      created_at: '2024-01-01T00:00:00Z'
+    };
+
+    (global.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockUpdatedUser
+    });
+
+    const updateData: types.UserProfile = {
+      bio: 'Updated bio',
+      skills: ['javascript', 'react'],
+      interests: ['web', 'ai'],
+      profile_image: 'https://example.com/image.png'
+    };
+
+    const result = await profileAPI.updateMe(updateData);
+
+    expect(result).toEqual(mockUpdatedUser);
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/profile/me'),
+      expect.objectContaining({
+        method: 'PUT'
+      })
+    );
+  });
+
+  it('should toggle user mode', async () => {
+    const mockUpdatedUser: types.User = {
+      id: 1,
+      email: 'test@example.com',
+      username: 'testuser',
+      full_name: 'Test User',
+      bio: null,
+      skills: null,
+      interests: null,
+      profile_image: null,
+      mode: 'hustler',
+      created_at: '2024-01-01T00:00:00Z'
+    };
+
+    (global.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockUpdatedUser
+    });
+
+    const result = await profileAPI.toggleMode('hustler');
+
+    expect(result.mode).toBe('hustler');
+  });
+});
+
+describe('API Service - Opportunities', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem('token', 'test-token-123');
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('should fetch all opportunities', async () => {
+    const mockOpportunities: types.Opportunity[] = [
+      {
+        id: 1,
+        title: 'Build a Website',
+        description: 'Need a professional website for our startup company.',
+        required_skills: '["react", "nodejs"]',
+        bounty_amount: 500,
+        status: 'open',
+        creator_id: 2,
+        created_at: '2024-01-01T00:00:00Z',
+        deadline: '2024-02-01T00:00:00Z'
+      }
+    ];
+
+    (global.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockOpportunities
+    });
+
+    const result = await opportunitiesAPI.getAll();
+
+    expect(result).toEqual(mockOpportunities);
+    expect(result).toHaveLength(1);
+  });
+
+  it('should create a new opportunity', async () => {
+    const mockCreatedOpp: types.Opportunity = {
+      id: 1,
+      title: 'Build a Website',
+      description: 'Need a professional website for our startup company.',
+      required_skills: '["react", "nodejs"]',
+      bounty_amount: 500,
+      status: 'open',
+      creator_id: 1,
+      created_at: '2024-01-01T00:00:00Z',
+      deadline: '2024-02-01T00:00:00Z'
+    };
+
+    (global.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockCreatedOpp
+    });
+
+    const oppData: types.OpportunityCreate = {
+      title: 'Build a Website',
+      description: 'Need a professional website for our startup company.',
+      required_skills: ['react', 'nodejs'],
+      bounty_amount: 500,
+      deadline: '2024-02-01T00:00:00Z'
+    };
+
+    const result = await opportunitiesAPI.create(oppData);
+
+    expect(result).toEqual(mockCreatedOpp);
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/opportunities'),
+      expect.objectContaining({
+        method: 'POST'
+      })
+    );
+  });
+
+  it('should fetch opportunity by id', async () => {
+    const mockOpp: types.Opportunity = {
+      id: 1,
+      title: 'Build a Website',
+      description: 'Need a professional website for our startup company.',
+      required_skills: '["react", "nodejs"]',
+      bounty_amount: 500,
+      status: 'open',
+      creator_id: 2,
+      created_at: '2024-01-01T00:00:00Z',
+      deadline: null
+    };
+
+    (global.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockOpp
+    });
+
+    const result = await opportunitiesAPI.getById(1);
+
+    expect(result).toEqual(mockOpp);
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/opportunities/1'),
+      expect.any(Object)
+    );
+  });
+
+  it('should update an opportunity', async () => {
+    const mockUpdatedOpp: types.Opportunity = {
+      id: 1,
+      title: 'Build a Website - Updated',
+      description: 'Need a professional website for our startup company.',
+      required_skills: '["react", "nodejs", "postgres"]',
+      bounty_amount: 750,
+      status: 'open',
+      creator_id: 1,
+      created_at: '2024-01-01T00:00:00Z',
+      deadline: null
+    };
+
+    (global.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockUpdatedOpp
+    });
+
+    const updateData: types.OpportunityUpdate = {
+      title: 'Build a Website - Updated',
+      bounty_amount: 750
+    };
+
+    const result = await opportunitiesAPI.update(1, updateData);
+
+    expect(result.title).toBe('Build a Website - Updated');
+    expect(result.bounty_amount).toBe(750);
+  });
+
+  it('should delete an opportunity', async () => {
+    (global.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({})
+    });
+
+    await opportunitiesAPI.delete(1);
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/opportunities/1'),
+      expect.objectContaining({
+        method: 'DELETE'
+      })
+    );
+  });
+
+  it('should apply to an opportunity', async () => {
+    const mockApplication: types.Application = {
+      id: 1,
+      opportunity_id: 1,
+      applicant_id: 1,
+      message: 'I am interested in this opportunity!',
+      status: 'pending',
+      created_at: '2024-01-01T00:00:00Z'
+    };
+
+    (global.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockApplication
+    });
+
+    const result = await opportunitiesAPI.apply(1, 'I am interested in this opportunity!');
+
+    expect(result).toEqual(mockApplication);
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/opportunities/1/apply'),
+      expect.objectContaining({
+        method: 'POST'
+      })
+    );
+  });
+
+  it('should fetch applications for an opportunity', async () => {
+    const mockApplications: types.Application[] = [
+      {
+        id: 1,
+        opportunity_id: 1,
+        applicant_id: 2,
+        message: 'I can do this job!',
+        status: 'pending',
+        created_at: '2024-01-01T00:00:00Z'
+      }
+    ];
+
+    (global.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockApplications
+    });
+
+    const result = await opportunitiesAPI.getApplications(1);
+
+    expect(result).toEqual(mockApplications);
+  });
+});
+
+describe('API Service - Network', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem('token', 'test-token-123');
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('should fetch all users', async () => {
+    const mockUsers: types.User[] = [
+      {
+        id: 1,
+        email: 'user1@example.com',
+        username: 'user1',
+        full_name: 'User One',
+        bio: 'I am a developer',
+        skills: '["javascript", "react"]',
+        interests: '["web"]',
+        profile_image: null,
+        mode: 'builder',
+        created_at: '2024-01-01T00:00:00Z'
+      },
+      {
+        id: 2,
+        email: 'user2@example.com',
+        username: 'user2',
+        full_name: 'User Two',
+        bio: 'I am looking for opportunities',
+        skills: '["python", "django"]',
+        interests: '["backend"]',
+        profile_image: null,
+        mode: 'hustler',
+        created_at: '2024-01-02T00:00:00Z'
+      }
+    ];
+
+    (global.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockUsers
+    });
+
+    const result = await networkAPI.getUsers();
+
+    expect(result).toEqual(mockUsers);
+    expect(result).toHaveLength(2);
+  });
+
+  it('should fetch user by id', async () => {
+    const mockUser: types.User = {
+      id: 1,
+      email: 'user1@example.com',
+      username: 'user1',
+      full_name: 'User One',
+      bio: 'I am a developer',
+      skills: '["javascript", "react"]',
+      interests: '["web"]',
+      profile_image: null,
+      mode: 'builder',
+      created_at: '2024-01-01T00:00:00Z'
+    };
+
+    (global.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockUser
+    });
+
+    const result = await networkAPI.getUserById(1);
+
+    expect(result).toEqual(mockUser);
+  });
+
+  it('should fetch my applications', async () => {
+    const mockApplications: types.Application[] = [
+      {
+        id: 1,
+        opportunity_id: 1,
+        applicant_id: 1,
+        message: 'I am interested!',
+        status: 'pending',
+        created_at: '2024-01-01T00:00:00Z'
+      }
+    ];
+
+    (global.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockApplications
+    });
+
+    const result = await networkAPI.getMyApplications();
+
+    expect(result).toEqual(mockApplications);
+  });
+});
